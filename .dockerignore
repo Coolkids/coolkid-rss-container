@@ -1,0 +1,10 @@
+.git
+.github
+
+README.md
+
+*.md
+*.log
+
+.idea
+.vscode
