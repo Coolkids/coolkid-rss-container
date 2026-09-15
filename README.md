@@ -132,6 +132,11 @@ docker logs -f coolkid-rss
 | `CRW_SETTING_CLEAN_DATA` | `coolkidrss.clean.data` | `false` | 是否清理历史数据 |
 | `CRW_SETTING_CLEAN_DATA_MONTH` | `coolkidrss.keep.data.month` | `12` | 保留最近多少个月的数据 |
 | `CRW_RSS_CODE_PATCH_MAX_BYTES` | `coolkidrss.rss.code.patch.max-bytes` | `524288` | 代码类型 RSS 单条提交 patch 最大保存字节数；超出后截断，避免大 patch 占用过多内存和存储 |
+| `CRW_RSS_ENRICHMENT_CONCURRENCY` | `coolkidrss.rss.enrichment.concurrency` | `3` | RSS 类型数据异步补充的全局并发数，限制 TMDB 和代码 patch 外部请求 |
+| `CRW_TMDB_API_TOKEN` | `coolkidrss.tmdb.api-token` | 空 | TMDB API Read Access Token；支持使用 `;` 分隔多个 Token，查询失败时自动切换；查询结果 Redis 缓存 7 天 |
+| `CRW_TMDB_BASE_URL` | `coolkidrss.tmdb.base-url` | `https://api.themoviedb.org/3` | TMDB API 地址 |
+| `CRW_TMDB_LANGUAGE` | `coolkidrss.tmdb.language` | `zh-CN` | TMDB 搜索和详情语言 |
+| `CRW_TMDB_IMAGE_BASE_URL` | `coolkidrss.tmdb.image-base-url` | `https://image.tmdb.org/t/p/w500` | TMDB 图片基础地址 |
 
 后端默认监听 `8081` 端口，并挂载在 `/coolkid-rss` 路径下；容器内的 Nginx 会将 `/coolkid-rss/api/` 请求转发到后端。
 
@@ -172,6 +177,11 @@ services:
       CRW_SETTING_CLEAN_DATA_MONTH: "12"
       # 代码类型 RSS 的 patch 最大保存/预览大小（字节）
       CRW_RSS_CODE_PATCH_MAX_BYTES: "524288"
+      # RSS 类型数据异步补充的全局并发数
+      CRW_RSS_ENRICHMENT_CONCURRENCY: "3"
+      # TMDB：填写 API Read Access Token 后启用影视信息补全
+      CRW_TMDB_API_TOKEN: ""
+      CRW_TMDB_LANGUAGE: zh-CN
 
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ || exit 1"]
