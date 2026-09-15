@@ -2,9 +2,11 @@
 
 ARG BACKEND_REPO=https://github.com/Coolkids/coolkid-rss-webflux.git
 ARG FRONTEND_REPO=https://github.com/Coolkids/coolkid-rss-web.git
+ARG ANITOPY_REPO=https://github.com/Coolkids/anitopy4j.git
 
 ARG BACKEND_REF=main
 ARG FRONTEND_REF=main
+ARG ANITOPY_REF=main
 
 
 # =========================================================
@@ -14,6 +16,8 @@ FROM maven:3.9-eclipse-temurin-21-alpine AS backend-builder
 
 ARG BACKEND_REPO
 ARG BACKEND_REF
+ARG ANITOPY_REPO
+ARG ANITOPY_REF
 
 RUN apk add --no-cache git
 
@@ -25,10 +29,19 @@ RUN git clone \
     "${BACKEND_REPO}" \
     backend
 
+RUN git clone \
+    --depth 1 \
+    --branch "${ANITOPY_REF}" \
+    "${ANITOPY_REPO}" \
+    anitopy4j
+
 WORKDIR /build/backend
 
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn clean package \
+    mvn -f /build/anitopy4j/pom.xml install \
+    -DskipTests \
+    -B \
+    && mvn clean package \
     -DskipTests \
     -B
 

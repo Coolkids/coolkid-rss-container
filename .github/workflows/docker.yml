@@ -15,6 +15,18 @@ on:
         default: "main"
         type: string
 
+      anitopy_ref:
+        description: "anitopy4j branch/tag"
+        required: true
+        default: "main"
+        type: string
+
+      skip_github_cache:
+        description: "Skip GitHub Actions cache"
+        required: false
+        default: true
+        type: boolean
+
   push:
     branches:
       - main
@@ -104,6 +116,7 @@ jobs:
         run: |
           BACKEND_REF="${{ inputs.backend_ref }}"
           FRONTEND_REF="${{ inputs.frontend_ref }}"
+          ANITOPY_REF="${{ inputs.anitopy_ref }}"
 
           if [ -z "$BACKEND_REF" ]; then
             BACKEND_REF="main"
@@ -113,11 +126,17 @@ jobs:
             FRONTEND_REF="main"
           fi
 
+          if [ -z "$ANITOPY_REF" ]; then
+            ANITOPY_REF="main"
+          fi
+
           echo "backend_ref=$BACKEND_REF" >> "$GITHUB_OUTPUT"
           echo "frontend_ref=$FRONTEND_REF" >> "$GITHUB_OUTPUT"
+          echo "anitopy_ref=$ANITOPY_REF" >> "$GITHUB_OUTPUT"
 
           echo "Backend:  $BACKEND_REF"
           echo "Frontend: $FRONTEND_REF"
+          echo "Anitopy:  $ANITOPY_REF"
 
 
       # ===================================================
@@ -138,9 +157,10 @@ jobs:
           build-args: |
             BACKEND_REF=${{ steps.refs.outputs.backend_ref }}
             FRONTEND_REF=${{ steps.refs.outputs.frontend_ref }}
+            ANITOPY_REF=${{ steps.refs.outputs.anitopy_ref }}
 
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: ${{ !inputs.skip_github_cache && 'type=gha' || '' }}
+          cache-to: ${{ !inputs.skip_github_cache && 'type=gha,mode=max' || '' }}
