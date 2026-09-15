@@ -6,6 +6,9 @@
 
 - 后端：[Coolkids/coolkid-rss-webflux](https://github.com/Coolkids/coolkid-rss-webflux)
 - 前端：[Coolkids/coolkid-rss-web](https://github.com/Coolkids/coolkid-rss-web)
+- 影视标题解析依赖：[Coolkids/anitopy4j](https://github.com/Coolkids/anitopy4j)
+
+`anitopy4j` 通过 GitHub 仓库远程拉取，并在 Docker 构建后端之前安装到构建容器的 Maven 本地仓库中。镜像构建不依赖宿主机上的本地项目目录。
 
 运行时由同一个容器提供前端页面和后端 API：Nginx 监听 `80` 端口，Supervisor 负责同时启动 Nginx 与 Spring Boot 后端。
 
@@ -39,7 +42,11 @@ docker run -d \
 
 ### 本地构建
 
+本项目使用 Dockerfile 的 BuildKit cache mount，建议使用 Docker 23+ 或
+`docker buildx` 构建：
+
 ```bash
+cd /home/coolkid/code/coolkid-rss-container
 docker build -t coolkid-rss:local .
 docker run -d \
   --name coolkid-rss \
@@ -50,7 +57,7 @@ docker run -d \
 
 ## 构建参数
 
-`Dockerfile` 支持通过 `--build-arg` 指定后端、前端仓库及其分支或标签：
+`Dockerfile` 支持通过 `--build-arg` 指定后端、前端、`anitopy4j` 仓库及其分支或标签：
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
@@ -58,6 +65,8 @@ docker run -d \
 | `BACKEND_REF` | `main` | 后端分支或标签 |
 | `FRONTEND_REPO` | `https://github.com/Coolkids/coolkid-rss-web.git` | 前端 Git 仓库 |
 | `FRONTEND_REF` | `main` | 前端分支或标签 |
+| `ANITOPY_REPO` | `https://github.com/Coolkids/anitopy4j.git` | `anitopy4j` Git 仓库 |
+| `ANITOPY_REF` | `main` | `anitopy4j` 分支或标签 |
 
 例如，构建指定版本：
 
@@ -65,10 +74,23 @@ docker run -d \
 docker build \
   --build-arg BACKEND_REF=v1.0.0 \
   --build-arg FRONTEND_REF=v1.0.0 \
+  --build-arg ANITOPY_REF=main \
   -t coolkid-rss:v1.0.0 .
 ```
 
-构建阶段使用 Maven 和 Node.js：后端执行 `mvn clean package -DskipTests`，前端执行 `npm install && npm run build`。
+构建阶段使用 Maven 和 Node.js，顺序如下：
+
+1. 从 `ANITOPY_REPO` 拉取 `ANITOPY_REF`。
+2. 执行 `mvn -f /build/anitopy4j/pom.xml install -DskipTests`，将依赖安装到构建容器的 Maven 仓库。
+3. 从 `BACKEND_REPO` 拉取后端并执行 `mvn clean package -DskipTests`。
+4. 从 `FRONTEND_REPO` 拉取前端并执行 `npm install && npm run build`。
+
+后端的 Maven 依赖坐标为 `io.github.coolkid:anitopy4j:1.0.0-SNAPSHOT`。如果只在宿主机直接构建后端而不使用本 Dockerfile，需要先安装远程依赖：
+
+```bash
+git clone --depth 1 https://github.com/Coolkids/anitopy4j.git
+mvn -f anitopy4j/pom.xml install -DskipTests
+```
 
 ## 运行配置
 
@@ -109,6 +131,7 @@ docker logs -f coolkid-rss
 | `CRW_SNID_ND` | `coolkidrss.nodeId` | `1` | Snowflake 节点标识，范围 `0–31` |
 | `CRW_SETTING_CLEAN_DATA` | `coolkidrss.clean.data` | `false` | 是否清理历史数据 |
 | `CRW_SETTING_CLEAN_DATA_MONTH` | `coolkidrss.keep.data.month` | `12` | 保留最近多少个月的数据 |
+| `CRW_RSS_CODE_PATCH_MAX_BYTES` | `coolkidrss.rss.code.patch.max-bytes` | `524288` | 代码类型 RSS 单条提交 patch 最大保存字节数；超出后截断，避免大 patch 占用过多内存和存储 |
 
 后端默认监听 `8081` 端口，并挂载在 `/coolkid-rss` 路径下；容器内的 Nginx 会将 `/coolkid-rss/api/` 请求转发到后端。
 
@@ -147,6 +170,8 @@ services:
       CRW_SNID_ND: "1"
       CRW_SETTING_CLEAN_DATA: "false"
       CRW_SETTING_CLEAN_DATA_MONTH: "12"
+      # 代码类型 RSS 的 patch 最大保存/预览大小（字节）
+      CRW_RSS_CODE_PATCH_MAX_BYTES: "524288"
 
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ || exit 1"]
@@ -211,7 +236,7 @@ docker compose down
 - 推送匹配 `v*` 的标签
 - 手动触发 workflow
 
-默认镜像地址为 `ghcr.io/coolkids/coolkid-rss`。手动触发时可以分别指定 `backend_ref` 和 `frontend_ref`，用于构建不同的后端、前端分支或标签。
+默认镜像地址为 `ghcr.io/coolkids/coolkid-rss`。手动触发时可以分别指定 `backend_ref`、`frontend_ref` 和 `anitopy_ref`，用于构建不同的后端、前端和 `anitopy4j` 分支或标签。
 
 工作流当前构建 `linux/amd64` 镜像，并使用 GitHub Actions cache 加速后续构建。
 
@@ -227,5 +252,6 @@ docker compose down
 ## 注意事项
 
 - 构建时需要能够访问 GitHub、Maven 仓库和 npm Registry。
+- `anitopy4j` 是构建时从 `https://github.com/Coolkids/anitopy4j.git` 拉取的远程依赖；如需固定版本，使用 `ANITOPY_REF` 指定分支或标签。
 - 后端和前端仓库的指定分支或标签必须存在，并且产物路径需要分别包含 `target/coolkid-rss.jar` 和 `dist/spa/`。
 - 当前镜像只声明并构建 `linux/amd64` 平台；在 ARM 设备上运行时建议使用兼容模拟，或扩展 CI 构建平台配置。
